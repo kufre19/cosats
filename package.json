@@ -1,0 +1,11 @@
+{
+  "name": "cosats",
+  "version": "1.0.0",
+  "description": "An ai agent that communicates with bitcoin wallets about the market and stuffs",
+  "main": "index.js",
+  "scripts": {
+    "test": "--test"
+  },
+  "author": "Emmauel Maxwell Kufre",
+  "license": "MIT"
+}
