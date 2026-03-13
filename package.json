@@ -3,9 +3,15 @@
   "version": "1.0.0",
   "description": "An ai agent that communicates with bitcoin wallets about the market and stuffs",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "test": "--test"
   },
   "author": "Emmauel Maxwell Kufre",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@nostr/tools": "npm:@jsr/nostr__tools@^2.23.3",
+    "dotenv": "^17.3.1",
+    "nostr-tools": "^2.23.3"
+  }
 }
