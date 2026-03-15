@@ -8,6 +8,7 @@ Current
 - [ ] Store agent owner public key
 - [ ] Store agent owner private key
 - [ ] Store agent owner public key
+- [ ] Fetch Private DMs between agent and owner from nostr
 
 how to run the project:
 

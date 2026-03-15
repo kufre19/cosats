@@ -8,8 +8,10 @@ import { NostrObj } from './src/nostr/Nostr.js';
 async function main() {
  
 
-    NostrObj.showKeys();
-    NostrObj.storeAgentOwnerPubKey();
+    // NostrObj.connectToRelay();
+    NostrObj.sendMessages();
+    // NostrObj.getMessages();
+
 }
 
 main();
