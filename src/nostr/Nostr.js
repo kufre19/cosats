@@ -1,11 +1,13 @@
 import fs from 'fs';
 import readline from 'readline';
-import { generateSecretKey, getPublicKey,finalizeEvent, verifyEvent  } from '@nostr/tools/pure'
+import { generateSecretKey, getPublicKey, finalizeEvent, verifyEvent,getEventHash } from '@nostr/tools/pure'
 import { useWebSocketImplementation } from '@nostr/tools/pool'
 import { SimplePool } from '@nostr/tools/pool'
-import { bytesToHex,hexToBytes } from '@noble/hashes/utils.js'
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import nostrRelays from './nostr_relays.json' with {type: "json"}
 import WebSocket from 'ws'
+import * as nip44 from '@nostr/tools/nip44';
+import * as nip19 from '@nostr/tools/nip19';
 
 useWebSocketImplementation(WebSocket)
 
@@ -14,24 +16,44 @@ useWebSocketImplementation(WebSocket)
 class Nostr {
     privateKey = null;
     publicKey = null;
+    privateKeyInBytes = null;
+    agentOwnerPubKey = null;
+
     constructor() {
         this.loadKeys();
+        this.loadAgentOwnerPubkey();
     }
 
 
+    // read this method again and refactor this method later to be less code and less stupid... lol
     loadKeys() {
-        const keys = JSON.parse(fs.readFileSync('nostr_keys.json', 'utf8'));
+        let keys = JSON.parse(fs.readFileSync('nostr_keys.json', 'utf8'));
 
         if (keys.privateKey == null || keys.publicKey == null) {
             this.privateKey = generateSecretKey();
             this.publicKey = getPublicKey(this.privateKey);
+            this.privateKeyInBytes = hexToBytes(keys.privateKey) ;
             this.saveAgentKeys();
+        }else{
+            this.privateKey = keys.privateKey;
+            this.privateKeyInBytes = hexToBytes(keys.privateKey) ;
+            this.publicKey = keys.publicKey;
         }
-        this.privateKey = keys.privateKey;
-        this.publicKey = keys.publicKey;
+       
 
+    }
 
-
+    /**
+     * Will be used to load the agent owner public key into the object for easier access--
+     * 
+     */
+    loadAgentOwnerPubkey() {
+        const keys = JSON.parse(fs.readFileSync('owner_pubKey.json', 'utf8'));
+        if (keys.pubKey == null) {
+            this.agentOwnerPubKey = this.requetAgentOwnerPubKey();
+        } else {
+            this.agentOwnerPubKey = keys.pubKey;
+        }
     }
 
     saveAgentKeys() {
@@ -58,21 +80,21 @@ class Nostr {
      * Fetch messages between agent and owner from nostr
      */
     async getMessages() {
-        const relays = nostrRelays;        
+        const relays = nostrRelays;
         const pool = new SimplePool();
 
         pool.subscribe(
             relays,
-             {
-                 kinds: [1],
-                 authors: [this.publicKey],
-             },
-             {
-                 onevent(event) {
-                     console.log('got event:', event)
-                 }
-             }
-         )
+            {
+                kinds: [1],
+                authors: [this.publicKey],
+            },
+            {
+                onevent(event) {
+                    console.log('got event:', event)
+                }
+            }
+        )
 
     }
 
@@ -81,32 +103,116 @@ class Nostr {
      */
     async sendMessages() {
         // let's publish a new event while simultaneously monitoring the relay for it
-        
+
         const relays = nostrRelays;
         const pool = new SimplePool();
 
-       
-        let eventTemplate = {
-            kind: 1,
-            created_at: Math.floor(Date.now() / 1000),
-            tags: [],
-            content: 'hello world from cosats',
+        let dmSubject = "annthing ";
+        let privateDmMessage = "this is a private dm ";
+
+
+        let kind14Event = {
+            "kind": 14,
+            "tags": [
+                ["p",this.agentOwnerPubKey, nostrRelays[0]],
+                ["subject", dmSubject],
+            ],
+            "content": privateDmMessage
         }
 
-        // this assigns the pubkey, calculates the event id and signs the event in a single step
-        const signedEvent = finalizeEvent(eventTemplate, hexToBytes(this.privateKey))
-        await Promise.any(pool.publish(relays, signedEvent))
+
+        let rumor = this.createRumor(kind14Event,this.privateKeyInBytes);
+        let seal = this.createSeal(rumor,this.privateKeyInBytes,this.agentOwnerPubKey);
+        let giftWrap = this.createWrap(seal,this.agentOwnerPubKey);
+
+
+        await Promise.any(pool.publish(relays, giftWrap))
 
 
     }
 
+    nip44ConversationKey(privateKey, RecipientPublicKey){
+        return nip44.v2.utils.getConversationKey(privateKey, RecipientPublicKey)
+    }
+       
+      
+    nip44Encrypt(data, privateKey, publicKey){
+        return nip44.v2.encrypt(JSON.stringify(data), this.nip44ConversationKey(privateKey, publicKey));
+    }
+        
+      
+    nip44Decrypt(data, privateKey){
+        return  JSON.parse(nip44.v2.decrypt(data.content, this.nip44ConversationKey(privateKey, data.pubkey)));
+    }
+       
+
+    createRumor(event, privateKey){
+        const rumor = {
+          created_at: Math.floor(Date.now() / 1000),
+          content: "",
+          tags: [],
+          ...event,
+          pubkey: getPublicKey(privateKey),
+        } 
+      
+        rumor.id = getEventHash(rumor)
+      
+        return rumor;
+    }
+    createSeal(rumor, privateKey, recipientPublicKey){
+        return finalizeEvent(
+          {
+            kind: 13,
+            content: this.nip44Encrypt(rumor, privateKey, recipientPublicKey),
+            created_at: this.randomNow(),
+            tags: [],
+          },
+          privateKey
+        )
+      }
+      
+    createWrap = (event, recipientPublicKey) => {
+        const randomKey = generateSecretKey()
+      
+        return finalizeEvent(
+          {
+            kind: 1059,
+            content: this.nip44Encrypt(event, randomKey, recipientPublicKey),
+            created_at: this.randomNow(),
+            tags: [["p", recipientPublicKey]],
+          },
+          randomKey
+        )
+    }
+
+    generateRandomKeys()
+    {
+        let secKey = generateSecretKey();
+        let pubKey = getPublicKey(secKey);
+        return {
+            "secKey": secKey,
+            "pubKey": pubKey
+        }
+    }
+    randomNow()
+    {
+        
+        return  Math.floor( (Date.now()/1000) - ((Math.floor(Math.random() * (5 - 2 + 1)) + 2) * 24 * 60 * 60) ); //creating a random timestamp between 2 - 5 days
+    }
+
+    giftWrapAndSeal() {
+        return `{
+        }`
+    }
+
     /**
-     * Will be called to actively store agent owner nostr public key for 
-     * direct communication  
+     * Will be called to actively request and store agent owner nostr public key for 
+     * direct communication  with the agent owner
      */
-    storeAgentOwnerPubKey() {
+    requetAgentOwnerPubKey() {
         const ownerKey = JSON.parse(fs.readFileSync("owner_pubKey.json", 'utf8'));
         let question = "";
+        let agentOwnerPubKey = "";
         const cliInterface = readline.createInterface({
             input: process.stdin,
             output: process.stdout
@@ -116,6 +222,7 @@ class Nostr {
             question = "No key found, what's your nostr public key:";
             cliInterface.question(question, (pubkey) => {
                 this.saveAgentOwnerPubKey(pubkey);
+                agentOwnerPubKey = pubkey;
                 console.log(`Agent owner public key stored: ${pubkey}`);
                 cliInterface.close();
             });
@@ -124,6 +231,8 @@ class Nostr {
             cliInterface.question(question, (answer) => {
                 switch (answer) {
                     case "yes":
+                        agentOwnerPubKey = ownerKey.pubKey;
+
                         cliInterface.close();
                         break;
 
@@ -131,6 +240,7 @@ class Nostr {
                         question = "What's your nostr public key";
                         cliInterface.question(question, (pubkey) => {
                             this.saveAgentOwnerPubKey(pubkey);
+                            agentOwnerPubKey = pubkey
                             console.log(`Agent owner public key stored: ${pubkey}`);
                             cliInterface.close();
                         })
@@ -142,6 +252,8 @@ class Nostr {
             });
 
         }
+
+        return agentOwnerPubKey;
 
 
     }
