@@ -15,3 +15,6 @@ how to run the project:
 1. clone the repository
 2. run `npm install` to install the dependencies
 3. run `npm run start` to start the project
+
+how to get local nostr relay:
+

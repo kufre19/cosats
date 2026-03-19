@@ -1,6 +1,4 @@
-import dotenv from 'dotenv';
-dotenv.config();
-// import { sendMesageToModel } from './src/Models/index.js';
+import { ModelObj } from './src/Models/Models.js';
 import { NostrObj } from './src/nostr/Nostr.js';
 
 
@@ -8,8 +6,9 @@ import { NostrObj } from './src/nostr/Nostr.js';
 async function main() {
  
 
-    // NostrObj.connectToRelay();
-    NostrObj.sendMessages();
+   
+    // ModelObj.updateModelConfig("model_environment","local");
+    // NostrObj.sendMessages({subject: "private dm", message: "this is a private dm"});
     // NostrObj.getMessages();
 
 }

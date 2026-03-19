@@ -1,0 +1,6 @@
+{
+  "model_environment": "online",
+  "model_provider": "openai",
+  "model_name": "gpt-4o-mini",
+  "model_api_key": true
+}

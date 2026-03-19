@@ -1,5 +1,4 @@
 .env
-owner_pubKey.json
-nostr_keys.json
-nostr_relays.json
+/keys
+model_keys.json
 /node_modules

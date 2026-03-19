@@ -1,0 +1,17 @@
+{
+    "local":{
+        "Qwen":[
+            "Qwen3.5b"
+        ]
+
+    },
+    "online":{
+       "openai":[
+        "gpt-4o-mini"
+       ],
+       "claude":[
+        "claude-3-5-sonnet-20240620"
+       ]
+    }
+    
+}

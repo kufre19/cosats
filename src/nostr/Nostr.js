@@ -27,7 +27,7 @@ class Nostr {
 
     // read this method again and refactor this method later to be less code and less stupid... lol
     loadKeys() {
-        let keys = JSON.parse(fs.readFileSync('nostr_keys.json', 'utf8'));
+        let keys = JSON.parse(fs.readFileSync('keys/nostr_keys.json', 'utf8'));
 
         if (keys.privateKey == null || keys.publicKey == null) {
             this.privateKey = generateSecretKey();
@@ -48,7 +48,7 @@ class Nostr {
      * 
      */
     loadAgentOwnerPubkey() {
-        const keys = JSON.parse(fs.readFileSync('owner_pubKey.json', 'utf8'));
+        const keys = JSON.parse(fs.readFileSync('keys/owner_pubKey.json', 'utf8'));
         if (keys.pubKey == null) {
             this.agentOwnerPubKey = this.requetAgentOwnerPubKey();
         } else {
@@ -57,14 +57,14 @@ class Nostr {
     }
 
     saveAgentKeys() {
-        fs.writeFileSync('nostr_keys.json', JSON.stringify({
+        fs.writeFileSync('keys/nostr_keys.json', JSON.stringify({
             privateKey: bytesToHex(this.privateKey),
             publicKey: this.publicKey
         }));
     }
 
     saveAgentOwnerPubKey(pubKey) {
-        fs.writeFileSync('owner_pubKey.json', JSON.stringify({
+        fs.writeFileSync('keys/owner_pubKey.json', JSON.stringify({
             pubKey: pubKey,
         }));
     }
@@ -78,7 +78,7 @@ class Nostr {
 
     /**
      * Fetch messages between agent and owner from nostr
-     */
+    */
     async getMessages() {
         const relays = nostrRelays;
         const pool = new SimplePool();
@@ -86,8 +86,8 @@ class Nostr {
         pool.subscribe(
             relays,
             {
-                kinds: [1],
-                authors: [this.publicKey],
+                kinds: [1,14],
+                authors: [this.publicKey,this.agentOwnerPubKey],
             },
             {
                 onevent(event) {
@@ -101,14 +101,14 @@ class Nostr {
     /**
      * Send message to agent owner via nostr
      */
-    async sendMessages() {
+    async sendMessages(message) {
         // let's publish a new event while simultaneously monitoring the relay for it
 
         const relays = nostrRelays;
         const pool = new SimplePool();
 
-        let dmSubject = "annthing ";
-        let privateDmMessage = "this is a private dm ";
+        let dmSubject = message.subject || "annthing ";
+        let privateDmMessage = message.message || "this is a private dm ";
 
 
         let kind14Event = {
@@ -126,8 +126,10 @@ class Nostr {
         let giftWrap = this.createWrap(seal,this.agentOwnerPubKey);
 
 
-        await Promise.any(pool.publish(relays, giftWrap))
+        const messageSentToRelay = await Promise.any(pool.publish(relays, giftWrap))
+        console.log("message sent to relay: ", messageSentToRelay);
 
+        return messageSentToRelay;
 
     }
 
@@ -210,7 +212,7 @@ class Nostr {
      * direct communication  with the agent owner
      */
     requetAgentOwnerPubKey() {
-        const ownerKey = JSON.parse(fs.readFileSync("owner_pubKey.json", 'utf8'));
+        const ownerKey = JSON.parse(fs.readFileSync("keys/owner_pubKey.json", 'utf8'));
         let question = "";
         let agentOwnerPubKey = "";
         const cliInterface = readline.createInterface({

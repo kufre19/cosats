@@ -6,16 +6,22 @@
   "type": "module",
   "scripts": {
     "test": "--test",
-    "start": "node index.js"
+    "start": "node index.js",
+    "chat:build": "esbuild nostr_client/chat.js --bundle --format=esm --outfile=nostr_client/bundle.js",
+    "chat:watch": "esbuild nostr_client/chat.js --bundle --format=esm --outfile=nostr_client/bundle.js --watch"
   },
   "author": "Emmauel Maxwell Kufre",
   "license": "MIT",
   "dependencies": {
+    "@inquirer/prompts": "^8.3.2",
     "@nostr/tools": "npm:@jsr/nostr__tools@^2.23.3",
     "dotenv": "^17.3.1",
     "nostr-tools": "^2.23.3",
     "sqlite3": "^6.0.1",
     "uuid": "^13.0.0",
     "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.9"
   }
 }
