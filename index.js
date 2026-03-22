@@ -1,5 +1,6 @@
 import { ModelObj } from './src/Models/Models.js';
 import { NostrObj } from './src/nostr/Nostr.js';
+import { Agent } from './src/Agent/Agent.js';
 
 
 
