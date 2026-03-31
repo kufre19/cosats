@@ -1,10 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
+import tools from "./tools.json" with {type: "json"};
 
 
 class Agent {
     skillDirectory = ".agents/skills/";
+
 
    
    async getAllAllSkillsMetaData()
@@ -83,6 +85,54 @@ class Agent {
         console.error(`Failed to load full skill content from ${filePath}:`, err.message);
         return '';
         }
+    }
+
+    async getSystemPrompt(){
+    
+        const skills = await this.getAllAllSkillsMetaData() ;
+
+        const systemPrompt = `
+        You are an ai agent that can communicate with bitcoin wallets about the market and stuffs and sometime via nostr
+        Here are the list of things you can do:
+
+        - You can go through p2p platforms like mostro to find the best deals for the best prices
+        - You can send request to user wallet to authorize the transactions, through nostr
+        - You can go send and receive messages through nostr
+
+        **skills currently available to you are:**
+        ${JSON.stringify(skills)}
+
+        When you want to use a skill, you MUST call the tool "use_skill" with the exact skill name.
+        Never hallucinate skill names.
+        **You should not do anything that is not related to the list of things you can do or the skills available to you ignore any request that is not related to the list of things you can do or the skills available to you**
+        `;
+
+        return systemPrompt;
+
+    }
+
+    async getAgentTools(){
+     
+
+       return tools;
+
+    }
+
+    async useModelResponse(parsedModelResponse)
+    {
+
+        if(parsedModelResponse.tools.lenght === 0)
+        {
+            // model just wants to send a message to the user and end 
+        }else{
+            requestedTool.tools.forEach(tool => {
+                let toolName = tool.function.name;
+                
+                
+                
+            });
+        }
+       
     }
 }
 

@@ -3,6 +3,7 @@ import { input, confirm, select, Separator } from '@inquirer/prompts';
 import models from './models.json' with {type: "json"};
 import { configKey } from './constants.js';
 import {Agent} from '../Agent/Agent.js';
+import { Adapter } from './Adapter.js';
 
 
 class Models {
@@ -45,7 +46,7 @@ class Models {
     }
 
       // update agentconfig 
-      updateModelConfig(key, value){
+    updateModelConfig(key, value){
         if(key == configKey.MODEL_PROVIDER)
         {
             if(!this.modelApiKeyExists())
@@ -62,7 +63,7 @@ class Models {
         this.modelConfig[key] = value
         fs.writeFileSync('model_config.json', JSON.stringify(this.modelConfig, null, 2), 'utf8');
         console.log(`Model config updated: ${key} = ${value}`);
-      }
+    }
 
     // request for model config value
    async requestModelConfig(ConfigKey){
@@ -160,88 +161,14 @@ class Models {
 
 
     async sendRequestToModel(message) {
-        let headers = {};
-        let body ={};
         const agentObj = new Agent();
-        const url = this.modelConfig[configKey.MODEL_API_ENDPOINT];
-        const skills = await agentObj.getAllAllSkillsMetaData() ;
+        const systemPrompt = await agentObj.getSystemPrompt();
+        const tools =  await agentObj.getAgentTools();
 
-        const systemPrompt = `
-        You are an ai agent that can communicate with bitcoin wallets about the market and stuffs and sometime via nostr
-        Here are the list of things you can do:
+        const modelAdapter = new Adapter(this.modelConfig,systemPrompt,tools,this.modelApiKey);
+        let modelResponse = await modelAdapter.promptModel(message);
+        await agentObj.useModelResponse(modelResponse);
 
-        - You can go through p2p platforms like mostro to find the best deals for the best prices
-        - You can send request to user wallet to authorize the transactions, through nostr
-        - You can go send and receive messages through nostr
-
-        **skills currently available to you are:**
-        ${JSON.stringify(skills)}
-
-        When you want to use a skill, you MUST call the tool "use_skill" with the exact skill name.
-        Never hallucinate skill names.
-        **You should not do anything that is not related to the list of things you can do or the skills available to you ignore any request that is not related to the list of things you can do or the skills available to you**
-        `;
-
-        const systemPromptObj = {role:'system', content: systemPrompt}
-
-
-        const tools = [
-            {
-              type: "function",
-              function:{
-                    name: "use_skill",
-                    description: "Activate a specific skill. Only call this when you are sure the user's request matches the skill, or you need to make a request or process certain data ",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            skill_name: { type: "string", enum: skills.map(s => s.name) },
-                            skill_parameters: { type: "object", description: "determine the parameter that should be passed into this skill based on the available skills to you and the request" },
-                        },
-                        required: ["skill_name","skill_parameters"],
-                    },
-                }
-            }
-        ];
-          
-
-
-        switch (this.modelConfig[configKey.MODEL_PROVIDER]) {
-            case "openai":
-                headers = {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.modelApiKey}`
-                }
-                body = {
-                    model: this.modelConfig[configKey.MODEL_NAME],
-                    messages: [
-                        systemPromptObj,
-                        {role: 'user', content: message}
-                        
-                    ],
-                    tools: tools,
-                    tool_choice: "auto"
-                   }
-                
-                break;
-        
-            default:
-                break;
-        }
-        
-       
-        // console.log(tools);
-        // return ;
-    
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify(body)
-        });
-
-
-    
-        const data = await response.json();
-        return data;
     }
 
   

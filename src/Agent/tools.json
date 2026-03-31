@@ -1,0 +1,15 @@
+[{
+    "type": "function",
+    "function":{
+          "name": "sendMessage",
+          "description": "Activate a specific skill. Only call this when you are sure the user's request matches the skill, or you need to make a request or process certain data ",
+          "parameters": {
+              "type": "object",
+              "properties": {
+                 
+              },
+              "required": ["skill_name","skill_parameters"]
+          }
+      }
+  }
+]
