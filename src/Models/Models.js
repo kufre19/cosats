@@ -2,7 +2,6 @@ import fs from 'fs';
 import { input, confirm, select, Separator } from '@inquirer/prompts';
 import models from './models.json' with {type: "json"};
 import { configKey } from './constants.js';
-import {Agent} from '../Agent/Agent.js';
 import { Adapter } from './Adapter.js';
 
 
@@ -10,13 +9,20 @@ class Models {
     modelConfig = null;
     modelApiKey = null;
 
+    constructor()
+    {
+        this.loadModelConfig();
+        this.getModelApiKey()
+
+    }
+
     
   
 
     async initModel(){
       
         // step 1 load the configs
-        this.loadModelConfig();
+        // this.loadModelConfig();
         // step 2 loop through the config to check for null values for a key, 
         // check condition needed to request for its value
         for(const key in this.modelConfig){
@@ -27,18 +33,7 @@ class Models {
         }
 
         // lets collect and instatiate the api key if it exists
-         await this.getModelApiKey()
-    
-
-        // step 3 send the agent.md file to the model to establish connection test.
-        const message = `
-        this is a test to make sure everything connects, send a message to the 
-        agent owner via nostr telling them the setup was successful and connection is completed`;
-        let response  = await this.sendRequestToModel(message);
-        console.log(JSON.stringify(response));
-
-        // step 4 put the program in a loop that waits for response from ai or gets a message from the owner via nostr 
-     
+        this.getModelApiKey();
         
     }
     loadModelConfig(){
@@ -119,7 +114,7 @@ class Models {
         return Object.hasOwn(keys,this.modelConfig[configKey.MODEL_PROVIDER]);
     }
 
-    async getModelApiKey(){
+    getModelApiKey(){
         
         if(this.modelApiKeyExists())
         {
@@ -160,25 +155,18 @@ class Models {
 
 
 
-    async sendRequestToModel(message) {
-        const agentObj = new Agent();
-        const systemPrompt = await agentObj.getSystemPrompt();
-        const tools =  await agentObj.getAgentTools();
+    async sendRequestToModel(message,systemPrompt,tools) {
+       
 
         const modelAdapter = new Adapter(this.modelConfig,systemPrompt,tools,this.modelApiKey);
         let modelResponse = await modelAdapter.promptModel(message);
-        await agentObj.useModelResponse(modelResponse);
-
+        return modelResponse;
     }
 
   
 }
 
 
-const ModelObj = new Models();
-ModelObj.initModel()
-
-
 export {
-    ModelObj
+    Models
 }

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import readline from 'readline';
-import { generateSecretKey, getPublicKey, finalizeEvent, verifyEvent,getEventHash } from '@nostr/tools/pure'
+import { generateSecretKey, getPublicKey, finalizeEvent, verifyEvent, getEventHash } from '@nostr/tools/pure'
 import { useWebSocketImplementation } from '@nostr/tools/pool'
 import { SimplePool } from '@nostr/tools/pool'
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
@@ -8,6 +8,7 @@ import nostrRelays from './nostr_relays.json' with {type: "json"}
 import WebSocket from 'ws'
 import * as nip44 from '@nostr/tools/nip44';
 import * as nip19 from '@nostr/tools/nip19';
+import event from "events";
 
 useWebSocketImplementation(WebSocket)
 
@@ -32,14 +33,14 @@ class Nostr {
         if (keys.privateKey == null || keys.publicKey == null) {
             this.privateKey = generateSecretKey();
             this.publicKey = getPublicKey(this.privateKey);
-            this.privateKeyInBytes = hexToBytes(keys.privateKey) ;
+            this.privateKeyInBytes = hexToBytes(keys.privateKey);
             this.saveAgentKeys();
-        }else{
+        } else {
             this.privateKey = keys.privateKey;
-            this.privateKeyInBytes = hexToBytes(keys.privateKey) ;
+            this.privateKeyInBytes = hexToBytes(keys.privateKey);
             this.publicKey = keys.publicKey;
         }
-       
+
 
     }
 
@@ -79,18 +80,20 @@ class Nostr {
     /**
      * Fetch messages between agent and owner from nostr
     */
-    async getMessages() {
+    async subscribeToDmEvents() {
         const relays = nostrRelays;
         const pool = new SimplePool();
 
         pool.subscribe(
             relays,
             {
-                kinds: [1,14],
-                authors: [this.publicKey,this.agentOwnerPubKey],
+                kinds: [1, 14,1059],
+                authors: [this.publicKey, this.agentOwnerPubKey],
             },
             {
-                onevent(event) {
+                onevent(nostrEvent) {
+                    const myEventEmitter  = new event();
+                    myEventEmitter.emit("nostrDmRecevied", nostrEvent);
                     console.log('got event:', event)
                 }
             }
@@ -104,91 +107,98 @@ class Nostr {
     async sendMessages(message) {
         // let's publish a new event while simultaneously monitoring the relay for it
 
-        const relays = nostrRelays;
-        const pool = new SimplePool();
+        try {
 
-        let dmSubject = message.subject || "annthing ";
-        let privateDmMessage = message.message || "this is a private dm ";
+            const relays = nostrRelays;
+            const pool = new SimplePool();
+
+            let dmSubject = message.subject || "annthing ";
+            let privateDmMessage = message.message || "this is a private dm ";
 
 
-        let kind14Event = {
-            "kind": 14,
-            "tags": [
-                ["p",this.agentOwnerPubKey, nostrRelays[0]],
-                ["subject", dmSubject],
-            ],
-            "content": privateDmMessage
+            let kind14Event = {
+                "kind": 14,
+                "tags": [
+                    ["p", this.agentOwnerPubKey, nostrRelays[0]],
+                    ["subject", dmSubject],
+                ],
+                "content": privateDmMessage
+            }
+
+
+            let rumor = this.createRumor(kind14Event, this.privateKeyInBytes);
+            let seal = this.createSeal(rumor, this.privateKeyInBytes, this.agentOwnerPubKey);
+            let giftWrap = this.createWrap(seal, this.agentOwnerPubKey);
+
+
+            const messageSentToRelay = await Promise.any(pool.publish(relays, giftWrap))
+            console.log("message sent to relay: ", messageSentToRelay);
+
+            return true;
+
+        } catch (error) {
+            console.error("Error sending message to agent owner via nostr: ", error);
+            return `Error sending message to agent owner via nostr: ${error}`;
         }
 
 
-        let rumor = this.createRumor(kind14Event,this.privateKeyInBytes);
-        let seal = this.createSeal(rumor,this.privateKeyInBytes,this.agentOwnerPubKey);
-        let giftWrap = this.createWrap(seal,this.agentOwnerPubKey);
-
-
-        const messageSentToRelay = await Promise.any(pool.publish(relays, giftWrap))
-        console.log("message sent to relay: ", messageSentToRelay);
-
-        return messageSentToRelay;
-
     }
 
-    nip44ConversationKey(privateKey, RecipientPublicKey){
+    nip44ConversationKey(privateKey, RecipientPublicKey) {
         return nip44.v2.utils.getConversationKey(privateKey, RecipientPublicKey)
     }
-       
-      
-    nip44Encrypt(data, privateKey, publicKey){
+
+
+    nip44Encrypt(data, privateKey, publicKey) {
         return nip44.v2.encrypt(JSON.stringify(data), this.nip44ConversationKey(privateKey, publicKey));
     }
-        
-      
-    nip44Decrypt(data, privateKey){
-        return  JSON.parse(nip44.v2.decrypt(data.content, this.nip44ConversationKey(privateKey, data.pubkey)));
-    }
-       
 
-    createRumor(event, privateKey){
+
+    nip44Decrypt(data, privateKey) {
+        return JSON.parse(nip44.v2.decrypt(data.content, this.nip44ConversationKey(privateKey, data.pubkey)));
+    }
+
+
+    createRumor(event, privateKey) {
         const rumor = {
-          created_at: Math.floor(Date.now() / 1000),
-          content: "",
-          tags: [],
-          ...event,
-          pubkey: getPublicKey(privateKey),
-        } 
-      
+            created_at: Math.floor(Date.now() / 1000),
+            content: "",
+            tags: [],
+            ...event,
+            pubkey: getPublicKey(privateKey),
+        }
+
         rumor.id = getEventHash(rumor)
-      
+
         return rumor;
     }
-    createSeal(rumor, privateKey, recipientPublicKey){
+    createSeal(rumor, privateKey, recipientPublicKey) {
         return finalizeEvent(
-          {
-            kind: 13,
-            content: this.nip44Encrypt(rumor, privateKey, recipientPublicKey),
-            created_at: this.randomNow(),
-            tags: [],
-          },
-          privateKey
-        )
-      }
-      
-    createWrap = (event, recipientPublicKey) => {
-        const randomKey = generateSecretKey()
-      
-        return finalizeEvent(
-          {
-            kind: 1059,
-            content: this.nip44Encrypt(event, randomKey, recipientPublicKey),
-            created_at: this.randomNow(),
-            tags: [["p", recipientPublicKey]],
-          },
-          randomKey
+            {
+                kind: 13,
+                content: this.nip44Encrypt(rumor, privateKey, recipientPublicKey),
+                created_at: this.randomNow(),
+                tags: [],
+            },
+            privateKey
         )
     }
 
-    generateRandomKeys()
-    {
+    createWrap = (event, recipientPublicKey) => {
+        const randomKey = generateSecretKey()
+
+        return finalizeEvent(
+            {
+                kind: 1059,
+                content: this.nip44Encrypt(event, randomKey, recipientPublicKey),
+                created_at: this.randomNow(),
+                tags: [["p", recipientPublicKey]],
+            },
+            randomKey
+        )
+    }
+
+    generateRandomKeys() {
         let secKey = generateSecretKey();
         let pubKey = getPublicKey(secKey);
         return {
@@ -196,17 +206,12 @@ class Nostr {
             "pubKey": pubKey
         }
     }
-    randomNow()
-    {
-        
-        return  Math.floor( (Date.now()/1000) - ((Math.floor(Math.random() * (5 - 2 + 1)) + 2) * 24 * 60 * 60) ); //creating a random timestamp between 2 - 5 days
+    randomNow() {
+
+        return Math.floor((Date.now() / 1000) - ((Math.floor(Math.random() * (5 - 2 + 1)) + 2) * 24 * 60 * 60)); //creating a random timestamp between 2 - 5 days
     }
 
-    giftWrapAndSeal() {
-        return `{
-        }`
-    }
-
+  
     /**
      * Will be called to actively request and store agent owner nostr public key for 
      * direct communication  with the agent owner
@@ -261,9 +266,9 @@ class Nostr {
     }
 }
 
-const NostrObj = new Nostr()
+
 
 export {
-    NostrObj
+    Nostr
 }
 

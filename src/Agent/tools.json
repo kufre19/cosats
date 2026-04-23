@@ -2,13 +2,16 @@
     "type": "function",
     "function":{
           "name": "sendMessage",
-          "description": "Activate a specific skill. Only call this when you are sure the user's request matches the skill, or you need to make a request or process certain data ",
+          "description": "Send a message to the owner via nostr",
           "parameters": {
               "type": "object",
               "properties": {
-                 
+                  "message": {
+                    "type": "string",
+                    "description": "The message you want to send to the owner via nostr"
+                  }
               },
-              "required": ["skill_name","skill_parameters"]
+              "required": ["message"]
           }
       }
   }

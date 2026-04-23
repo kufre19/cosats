@@ -162,7 +162,7 @@ var HashMD = class {
     abytes(data);
     const { view, buffer, blockLen } = this;
     const len = data.length;
-    for (let pos = 0; pos < len;) {
+    for (let pos = 0; pos < len; ) {
       const take = Math.min(blockLen - this.pos, len - pos);
       if (take === blockLen) {
         const dataView = createView(data);
@@ -2481,8 +2481,8 @@ var AbstractRelay = class _AbstractRelay {
     return relay;
   }
   closeAllSubscriptions(reason) {
-    for (let [_, sub2] of this.openSubs) {
-      sub2.close(reason);
+    for (let [_, sub] of this.openSubs) {
+      sub.close(reason);
     }
     this.openSubs.clear();
     for (let [_, ep] of this.openEventPublishes) {
@@ -2557,16 +2557,16 @@ var AbstractRelay = class _AbstractRelay {
         this._connected = true;
         const isReconnection = this.reconnectAttempts > 0;
         this.reconnectAttempts = 0;
-        for (const sub2 of this.openSubs.values()) {
-          sub2.eosed = false;
+        for (const sub of this.openSubs.values()) {
+          sub.eosed = false;
           if (isReconnection) {
-            for (let f = 0; f < sub2.filters.length; f++) {
-              if (sub2.lastEmitted) {
-                sub2.filters[f].since = sub2.lastEmitted + 1;
+            for (let f = 0; f < sub.filters.length; f++) {
+              if (sub.lastEmitted) {
+                sub.filters[f].since = sub.lastEmitted + 1;
               }
             }
           }
-          sub2.fire();
+          sub.fire();
         }
         if (this.enablePing) {
           this.pingIntervalHandle = setInterval(() => this.pingpong(), this.pingFrequency);
@@ -2601,7 +2601,7 @@ var AbstractRelay = class _AbstractRelay {
     return new Promise((resolve, reject) => {
       if (!this.connectionPromise) return reject(new Error(`no connection to ${this.url}, can't ping`));
       try {
-        const sub2 = this.subscribe([
+        const sub = this.subscribe([
           {
             ids: [
               "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -2612,7 +2612,7 @@ var AbstractRelay = class _AbstractRelay {
           label: "<forced-ping>",
           oneose: () => {
             resolve(true);
-            sub2.close();
+            sub.close();
           },
           onclose() {
             resolve(true);
@@ -2711,19 +2711,19 @@ var AbstractRelay = class _AbstractRelay {
       this.idleSince = void 0;
       this.ongoingOperations++;
     }
-    const sub2 = this.prepareSubscription(filters, params);
-    sub2.fire();
+    const sub = this.prepareSubscription(filters, params);
+    sub.fire();
     if (params.abort) {
-      params.abort.onabort = () => sub2.close(String(params.abort.reason || "<aborted>"));
+      params.abort.onabort = () => sub.close(String(params.abort.reason || "<aborted>"));
     }
-    return sub2;
+    return sub;
   }
   prepareSubscription(filters, params) {
     this.serial++;
     const id = params.id || (params.label ? params.label + ":" : "sub:") + this.serial;
-    const sub2 = new Subscription(this, id, filters, params);
-    this.openSubs.set(id, sub2);
-    return sub2;
+    const sub = new Subscription(this, id, filters, params);
+    this.openSubs.set(id, sub);
+    return sub;
   }
   close() {
     this.skipReconnection = true;
@@ -3097,8 +3097,8 @@ var AbstractSimplePool = class {
     return {
       async close(reason) {
         await allOpened;
-        subs.forEach((sub2) => {
-          sub2.close(reason);
+        subs.forEach((sub) => {
+          sub.close(reason);
         });
       }
     };
@@ -3656,7 +3656,7 @@ var Poly1305 = class {
     data = copyBytes2(data);
     const { buffer, blockLen } = this;
     const len = data.length;
-    for (let pos = 0; pos < len;) {
+    for (let pos = 0; pos < len; ) {
       const take = Math.min(blockLen - this.pos, len - pos);
       if (take === blockLen) {
         for (; blockLen <= len - pos; pos += blockLen)
@@ -4274,45 +4274,10 @@ var v2 = {
 
 // nostr_client/chat.js
 var RELAY_URL = "ws://localhost:7000";
-var AI_PUBKEY = "1221423ae8cd8b7cebc94b9377df93336f3a17c3fcd95876042517d553b953de";
+var RECIPIENT_PUBKEY = "1221423ae8cd8b7cebc94b9377df93336f3a17c3fcd95876042517d553b953de";
 var STORAGE_KEY = "cosats.ownerKeys.v1";
-var nowSec = () => Math.floor(Date.now() / 1e3);
-var randomNow = () => Math.floor(
-  Date.now() / 1e3 - (Math.floor(Math.random() * (5 - 2 + 1)) + 2) * 24 * 60 * 60
-);
-var el = {
-  relayUrl: document.getElementById("relayUrl"),
-  ownerPubkey: document.getElementById("ownerPubkey"),
-  aiPubkey: document.getElementById("aiPubkey"),
-  status: document.getElementById("status"),
-  chat: document.getElementById("chat"),
-  composer: document.getElementById("composer"),
-  input: document.getElementById("input"),
-  sendBtn: document.getElementById("sendBtn"),
-  reconnectBtn: document.getElementById("reconnectBtn"),
-  resetKeysBtn: document.getElementById("resetKeysBtn")
-};
-function escapeHtml(s) {
-  return String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
-}
-function setStatus(kind, text) {
-  el.status.className = `pill ${kind}`;
-  el.status.textContent = text;
-}
-function appendMessage({ who, body, ts }) {
-  const wrap = document.createElement("div");
-  wrap.className = `msg ${who === "me" ? "me" : "ai"}`;
-  const when = new Date((ts ?? nowSec()) * 1e3).toLocaleString();
-  wrap.innerHTML = `
-    <div class="h">
-      <div class="who">${who === "me" ? "Owner" : "AI"}</div>
-      <div class="when">${when}</div>
-    </div>
-    <div class="body">${escapeHtml(body)}</div>
-  `;
-  el.chat.appendChild(wrap);
-  el.chat.scrollTop = el.chat.scrollHeight;
-}
+var CONVERSATION_HISTORY = "cosats.ownerConversation.v1";
+var LIST_OF_EVENT_ID = "cosats.listofEventID.v1";
 function loadOrCreateOwnerKeys() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw) {
@@ -4329,165 +4294,156 @@ function resetOwnerKeys() {
   localStorage.removeItem(STORAGE_KEY);
   return loadOrCreateOwnerKeys();
 }
-function nip44ConversationKey(privateKeyBytes, recipientPublicKeyHex) {
-  return v2.utils.getConversationKey(privateKeyBytes, recipientPublicKeyHex);
-}
-function nip44EncryptJson(data, privateKeyBytes, recipientPublicKeyHex) {
-  return v2.encrypt(
-    JSON.stringify(data),
-    nip44ConversationKey(privateKeyBytes, recipientPublicKeyHex)
-  );
-}
-function nip44DecryptJson(eventWithContent, privateKeyBytes, senderPublicKeyHex) {
-  return JSON.parse(
-    v2.decrypt(
-      eventWithContent.content,
-      nip44ConversationKey(privateKeyBytes, senderPublicKeyHex)
-    )
-  );
-}
-function createRumor(event, privateKeyBytes) {
-  const rumor = {
-    created_at: nowSec(),
-    content: "",
-    tags: [],
-    ...event,
-    pubkey: getPublicKey(privateKeyBytes)
-  };
-  rumor.id = getEventHash(rumor);
-  return rumor;
-}
-function createSeal(rumor, privateKeyBytes, recipientPublicKeyHex) {
-  return finalizeEvent(
-    {
-      kind: 13,
-      content: nip44EncryptJson(rumor, privateKeyBytes, recipientPublicKeyHex),
-      created_at: randomNow(),
-      tags: []
-    },
-    privateKeyBytes
-  );
-}
-function createWrap(event, recipientPublicKeyHex) {
-  const randomKey = generateSecretKey();
-  return finalizeEvent(
-    {
-      kind: 1059,
-      content: nip44EncryptJson(event, randomKey, recipientPublicKeyHex),
-      created_at: randomNow(),
-      tags: [["p", recipientPublicKeyHex]]
-    },
-    randomKey
-  );
-}
 var ownerKeys = loadOrCreateOwnerKeys();
-var ownerSkBytes = hexToBytes(ownerKeys.skHex);
-el.relayUrl.textContent = RELAY_URL;
-el.ownerPubkey.textContent = ownerKeys.pkHex;
-el.aiPubkey.textContent = AI_PUBKEY;
-var pool = null;
-var sub = null;
-function disconnect() {
-  try {
-    sub?.close?.();
-  } catch {
-  }
-  sub = null;
-  try {
-    pool?.close?.([RELAY_URL]);
-  } catch {
-  }
-  pool = null;
+var ownerSk = hexToBytes(ownerKeys.skHex);
+var ownerPk = ownerKeys.pkHex;
+var nowSec = () => Math.floor(Date.now() / 1e3);
+var randomPast = () => Math.floor(Date.now() / 1e3 - (Math.random() * 3 + 2) * 86400);
+var statusEl = document.getElementById("status");
+var chatEl = document.getElementById("chat");
+var inputEl = document.getElementById("input");
+var sendBtn = document.getElementById("sendBtn");
+var form = document.getElementById("composer");
+var trunc = (pk) => `${pk.slice(0, 8)}\u2026${pk.slice(-8)}`;
+document.getElementById("ownerPubkey").textContent = trunc(ownerPk);
+document.getElementById("recipientPubkey").textContent = trunc(RECIPIENT_PUBKEY);
+function escapeHtml(s) {
+  return String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 }
+function setStatus(cls, text) {
+  statusEl.className = `status ${cls}`;
+  statusEl.textContent = text;
+}
+function addMessage(who, body, ts) {
+  const div = document.createElement("div");
+  div.className = `msg ${who === "me" ? "me" : "ai"}`;
+  const when = new Date((ts ?? nowSec()) * 1e3).toLocaleTimeString();
+  div.innerHTML = `<div class="msg-meta">${who === "me" ? "You" : "AI"} \xB7 ${when}</div><div class="msg-body">${escapeHtml(body)}</div>`;
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+function convKey(sk, pk) {
+  return v2.utils.getConversationKey(sk, pk);
+}
+function enc(data, sk, pk) {
+  return v2.encrypt(JSON.stringify(data), convKey(sk, pk));
+}
+function dec(ciphertext, sk, pk) {
+  return JSON.parse(v2.decrypt(ciphertext, convKey(sk, pk)));
+}
+function buildSeal(rumor) {
+  return finalizeEvent({
+    kind: 13,
+    content: enc(rumor, ownerSk, RECIPIENT_PUBKEY),
+    created_at: randomPast(),
+    tags: []
+  }, ownerSk);
+}
+function buildGiftWrap(seal) {
+  const ephSk = generateSecretKey();
+  return finalizeEvent({
+    kind: 1059,
+    content: enc(seal, ephSk, RECIPIENT_PUBKEY),
+    created_at: randomPast(),
+    tags: [["p", RECIPIENT_PUBKEY]]
+  }, ephSk);
+}
+function getConversationHistory() {
+  return JSON.parse(localStorage.getItem(CONVERSATION_HISTORY)) ?? [];
+}
+function saveMessageInConversationHistory(text, timestamp, by) {
+  const newConversation = {
+    "role": by,
+    "timestamp": timestamp,
+    "content": text
+  };
+  let conversationHistory = JSON.parse(localStorage.getItem(CONVERSATION_HISTORY)) ?? [];
+  conversationHistory.push(newConversation);
+  localStorage.setItem(CONVERSATION_HISTORY, JSON.stringify(conversationHistory));
+}
+function CheckEventIDList(event) {
+  let eventlist = JSON.parse(localStorage.getItem(LIST_OF_EVENT_ID));
+  return eventlist != null && eventlist.includes(event.id) ? true : updateEventIDList(event);
+}
+function updateEventIDList(event) {
+  let eventlist = JSON.parse(localStorage.getItem(LIST_OF_EVENT_ID)) ?? [];
+  eventlist.push(event.id);
+  localStorage.setItem(LIST_OF_EVENT_ID, JSON.stringify(eventlist));
+  saveMessageInConversationHistory(event.content, event.created_at, "ai");
+  addMessage("ai", event.content, event.created_at);
+}
+var pool = new SimplePool();
 function connect() {
-  disconnect();
   setStatus("warn", "connecting\u2026");
-  pool = new SimplePool();
-  sub = pool.subscribe(
+  let conversationHistory = getConversationHistory();
+  conversationHistory.forEach((conversation) => {
+    addMessage(conversation.by, conversation.content, conversation.timestamp);
+  });
+  let fetchedEvents = [];
+  pool.subscribe(
     [RELAY_URL],
+    { kinds: [1059] },
     {
-      kinds: [1059],
-      "#p": [ownerKeys.pkHex],
-      limit: 50
-    },
-    {
-      onevent: (giftWrap) => {
-        if (!giftWrap || giftWrap.kind !== 1059) return;
-        let seal;
+      onevent(wrap) {
         try {
-          seal = nip44DecryptJson(giftWrap, ownerSkBytes, giftWrap.pubkey);
+          const seal = dec(wrap.content, ownerSk, wrap.pubkey);
+          if (seal.kind !== 13) return;
+          let rumor = dec(seal.content, ownerSk, seal.pubkey);
+          if (rumor.kind !== 14) return;
+          fetchedEvents.push(rumor);
         } catch {
-          return;
         }
-        if (!seal?.content || seal?.kind !== 13 || !seal?.pubkey) return;
-        let rumor;
-        try {
-          rumor = nip44DecryptJson(seal, ownerSkBytes, seal.pubkey);
-        } catch {
-          return;
-        }
-        if (rumor?.kind !== 14) return;
-        const content = typeof rumor.content === "string" ? rumor.content : JSON.stringify(rumor.content);
-        appendMessage({ who: "ai", body: `private dm: ${content}`, ts: rumor.created_at });
       },
-      onerror: () => {
-        setStatus("bad", "error");
-      },
-      oneose: () => {
+      oneose() {
+        fetchedEvents.forEach((rumor) => {
+          CheckEventIDList(rumor);
+        });
+        console.log(fetchedEvents);
+        fetchedEvents = [];
         setStatus("ok", "connected");
+      },
+      onerror() {
+        setStatus("bad", "relay error");
       }
     }
   );
 }
 async function sendDm(text) {
-  const kind14Event = {
-    kind: 14,
-    tags: [
-      ["p", AI_PUBKEY, RELAY_URL],
-      ["subject", "private dm"]
-    ],
-    content: text
-  };
-  const rumor = createRumor(kind14Event, ownerSkBytes);
-  const seal = createSeal(rumor, ownerSkBytes, AI_PUBKEY);
-  const giftWrap = createWrap(seal, AI_PUBKEY);
-  const ok = await Promise.any(pool.publish([RELAY_URL], giftWrap));
-  if (!ok) throw new Error("Failed to publish event");
-  appendMessage({ who: "me", body: `private dm: ${text}`, ts: nowSec() });
+  const rumor = `buildRumor`(text);
+  const seal = buildSeal(rumor);
+  const wrap = buildGiftWrap(seal);
+  console.log("[NIP-59] rumor (unsigned kind-14):", rumor);
+  console.log("[NIP-59] seal  (signed kind-13):", seal);
+  console.log("[NIP-59] wrap  (kind-1059 emitted to relay):", wrap);
+  const [result] = await Promise.allSettled(pool.publish([RELAY_URL], wrap));
+  if (result.status === "rejected") throw result.reason;
+  let msgTimestamp = nowSec();
+  saveMessageInConversationHistory(text, msgTimestamp, "me");
+  addMessage("me", text, msgTimestamp);
 }
-el.composer.addEventListener("submit", async (e) => {
+form.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const text = el.input.value.trim();
+  const text = inputEl.value.trim();
   if (!text) return;
-  if (!pool) {
-    appendMessage({ who: "me", body: "Not connected to relay.", ts: nowSec() });
-    return;
-  }
-  el.sendBtn.disabled = true;
+  sendBtn.disabled = true;
   try {
     await sendDm(text);
-    el.input.value = "";
+    inputEl.value = "";
   } catch (err) {
-    appendMessage({ who: "me", body: `Send failed: ${err?.message ?? err}`, ts: nowSec() });
+    addMessage("me", `Send failed: ${err?.message ?? err}`, nowSec());
   } finally {
-    el.sendBtn.disabled = false;
+    sendBtn.disabled = false;
   }
 });
-el.input.addEventListener("keydown", (e) => {
+inputEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
-    el.composer.requestSubmit();
+    form.requestSubmit();
   }
 });
-el.reconnectBtn.addEventListener("click", () => {
-  connect();
-});
-el.resetKeysBtn.addEventListener("click", () => {
-  ownerKeys = resetOwnerKeys();
-  ownerSkBytes = hexToBytes(ownerKeys.skHex);
-  el.ownerPubkey.textContent = ownerKeys.pkHex;
-  appendMessage({ who: "me", body: `Generated new owner keys.`, ts: nowSec() });
-  connect();
+document.getElementById("resetKeysBtn").addEventListener("click", () => {
+  resetOwnerKeys();
+  location.reload();
 });
 connect();
 /*! Bundled license information:

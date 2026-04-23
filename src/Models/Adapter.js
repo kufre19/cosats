@@ -1,5 +1,8 @@
 import { configKey } from "./constants.js";
 
+/**
+ * Adapter class is used in sending message to models and parsing them based on the model provider in the model config 
+ */
 
 class Adapter{
     provider = {};
@@ -24,11 +27,6 @@ class Adapter{
      
       
         let systemPromptObj = {};
-
-
-        
-          
-
 
         switch (this.provider[configKey.MODEL_PROVIDER]) {
             case "openai":
